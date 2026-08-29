@@ -15,7 +15,7 @@ public class MentalNoteTools
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    private const string DateTimeFormatHint = "ISO 8601 format, e.g. 2026-08-29T14:30:00 (times are treated as local time)";
+    private const string DateTimeFormatHint = "ISO 8601 timestamp, e.g. 2026-08-29T14:30:00";
     private const string DateFormatHint = "ISO 8601 format, e.g. 2026-08-29";
 
     private readonly MentalNoteStore _store;
@@ -26,10 +26,10 @@ public class MentalNoteTools
     }
 
     [McpServerTool(Name = "create_mental_note")]
-    [Description("Create a mental note scheduled for a specific date and time.")]
+    [Description("Create a mental note for a specific date and time. The note time is a plain timestamp, stored and queried exactly as given.")]
     public string CreateMentalNote(
         [Description("Short title or summary of the mental note")] string title,
-        [Description("Date and time the note is for, in ISO 8601 format, e.g. 2026-08-29T14:30:00. Times are treated as local time.")] string noteDateTime,
+        [Description("Timestamp for the note, in ISO 8601 format, e.g. 2026-08-29T14:30:00. Stored exactly as given, with no timezone conversion.")] string noteDateTime,
         [Description("Optional extra details or context for the note")] string? details = null)
     {
         if (string.IsNullOrWhiteSpace(title))
@@ -48,7 +48,7 @@ public class MentalNoteTools
     }
 
     [McpServerTool(Name = "get_mental_notes_for_date")]
-    [Description("Get all mental notes scheduled on a specific date (any time that day). Returns a JSON array of notes with their ids.")]
+    [Description("Get all mental notes with a timestamp on a specific date (any time that day). Returns a JSON array of notes with their ids.")]
     public string GetMentalNotesForDate(
         [Description("The date to get notes for, in ISO 8601 format, e.g. 2026-08-29")] string date)
     {
@@ -62,7 +62,7 @@ public class MentalNoteTools
     }
 
     [McpServerTool(Name = "get_mental_notes_for_date_range")]
-    [Description("Get all mental notes scheduled within a range of dates, inclusive of both the start and end dates. Returns a JSON array of notes with their ids.")]
+    [Description("Get all mental notes with a timestamp within a range of dates, inclusive of both the start and end dates. Returns a JSON array of notes with their ids.")]
     public string GetMentalNotesForDateRange(
         [Description("Start of the date range (inclusive), in ISO 8601 format, e.g. 2026-08-29")] string startDate,
         [Description("End of the date range (inclusive), in ISO 8601 format, e.g. 2026-09-05")] string endDate)
@@ -87,9 +87,9 @@ public class MentalNoteTools
     }
 
     [McpServerTool(Name = "get_mental_notes_for_datetime")]
-    [Description("Get all mental notes scheduled at a specific date and time (exact match to the minute-level scheduled time). Returns a JSON array of notes with their ids.")]
+    [Description("Get all mental notes at a specific timestamp (exact match on the timestamp). Returns a JSON array of notes with their ids.")]
     public string GetMentalNotesForDateTime(
-        [Description("The exact date and time to get notes for, in ISO 8601 format, e.g. 2026-08-29T14:30:00. Times are treated as local time.")] string dateTime)
+        [Description("The exact timestamp to get notes for, in ISO 8601 format, e.g. 2026-08-29T14:30:00")] string dateTime)
     {
         if (!TryParseDateTime(dateTime, out var parsedDateTime, out var error))
         {
@@ -141,9 +141,9 @@ public class MentalNoteTools
     private static bool TryParseDate(string? value, out DateTime date, out string error)
     {
         if (!string.IsNullOrWhiteSpace(value)
-            && DateTimeOffset.TryParse(value.Trim(), CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var parsed))
+            && DateTime.TryParse(value.Trim(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed))
         {
-            date = parsed.LocalDateTime.Date;
+            date = parsed.Date;
             error = string.Empty;
             return true;
         }
@@ -156,10 +156,9 @@ public class MentalNoteTools
     private static bool TryParseDateTime(string? value, out DateTime dateTime, out string error)
     {
         if (!string.IsNullOrWhiteSpace(value)
-            && DateTimeOffset.TryParse(value.Trim(), CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var parsed))
+            && DateTime.TryParse(value.Trim(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed))
         {
-            var local = parsed.LocalDateTime;
-            dateTime = local.AddTicks(-(local.Ticks % TimeSpan.TicksPerSecond));
+            dateTime = parsed.AddTicks(-(parsed.Ticks % TimeSpan.TicksPerSecond));
             error = string.Empty;
             return true;
         }

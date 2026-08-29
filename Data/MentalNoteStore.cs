@@ -197,7 +197,7 @@ public class MentalNoteStore
             Id = reader.GetInt64(0),
             Title = reader.GetString(1),
             Details = reader.IsDBNull(2) ? null : reader.GetString(2),
-            NoteDateTime = DateTime.Parse(noteDateTimeText, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal),
+            NoteDateTime = DateTime.Parse(noteDateTimeText, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
             IsDone = reader.GetInt64(4) != 0,
             CompletedAt = reader.IsDBNull(5) ? null : reader.GetDateTimeOffset(5),
             CreatedAt = reader.GetDateTimeOffset(6)
