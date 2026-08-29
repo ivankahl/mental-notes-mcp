@@ -8,7 +8,7 @@ public class MentalNote
 
     public string? Details { get; set; }
 
-    public DateTime NoteDateTime { get; set; }
+    public DateTimeOffset NoteDateTime { get; set; }
 
     public bool IsDone { get; set; }
 

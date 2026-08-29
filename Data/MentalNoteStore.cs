@@ -37,7 +37,7 @@ public class MentalNoteStore
         EnsureDatabase();
     }
 
-    public MentalNote Create(string title, string? details, DateTime noteDateTime)
+    public MentalNote Create(string title, string? details, DateTimeOffset noteDateTime)
     {
         using var connection = OpenConnection();
 
@@ -74,7 +74,7 @@ public class MentalNoteStore
     public IReadOnlyList<MentalNote> GetForDateRange(DateTime startDate, DateTime endDate)
         => GetInRange(startDate.Date, endDate.Date);
 
-    public IReadOnlyList<MentalNote> GetForDateTime(DateTime dateTime)
+    public IReadOnlyList<MentalNote> GetForDateTime(DateTimeOffset dateTime)
     {
         using var connection = OpenConnection();
 
@@ -82,10 +82,10 @@ public class MentalNoteStore
         command.CommandText = """
             SELECT Id, Title, Details, NoteDateTime, IsDone, CompletedAt, CreatedAt
             FROM MentalNotes
-            WHERE NoteDateTime = $noteDateTime
+            WHERE substr(NoteDateTime, 1, 19) = $noteDateTime
             ORDER BY Id;
             """;
-        command.Parameters.AddWithValue("$noteDateTime", FormatDateTime(dateTime));
+        command.Parameters.AddWithValue("$noteDateTime", dateTime.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture));
 
         return ReadNotes(command);
     }
@@ -197,13 +197,13 @@ public class MentalNoteStore
             Id = reader.GetInt64(0),
             Title = reader.GetString(1),
             Details = reader.IsDBNull(2) ? null : reader.GetString(2),
-            NoteDateTime = DateTime.Parse(noteDateTimeText, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
+            NoteDateTime = DateTimeOffset.Parse(noteDateTimeText, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
             IsDone = reader.GetInt64(4) != 0,
             CompletedAt = reader.IsDBNull(5) ? null : reader.GetDateTimeOffset(5),
             CreatedAt = reader.GetDateTimeOffset(6)
         };
     }
 
-    private static string FormatDateTime(DateTime value)
-        => value.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture);
+    private static string FormatDateTime(DateTimeOffset value)
+        => value.ToString("yyyy-MM-dd'T'HH:mm:ssK", CultureInfo.InvariantCulture);
 }
