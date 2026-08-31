@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Globalization;
 using MentalNoteMcp.Models;
 using Microsoft.Data.Sqlite;
@@ -68,51 +69,68 @@ public class MentalNoteStore
         };
     }
 
-    public IReadOnlyList<MentalNote> GetForDate(DateTime date)
-        => GetInRange(date.Date, date.Date);
-
-    public IReadOnlyList<MentalNote> GetForDateRange(DateTime startDate, DateTime endDate)
-        => GetInRange(startDate.Date, endDate.Date);
-
-    public IReadOnlyList<MentalNote> GetForDateTime(DateTimeOffset dateTime)
+    public IReadOnlyList<MentalNote> Search(DateTime? date, DateTime? startDate, DateTime? endDate, DateTimeOffset? timestamp, bool? done)
     {
         using var connection = OpenConnection();
-
         using var command = connection.CreateCommand();
-        command.CommandText = """
+
+        var conditions = new List<string>();
+
+        if (date.HasValue)
+        {
+            conditions.Add("NoteDateTime >= $dateStart AND NoteDateTime < $dateEndExclusive");
+            command.Parameters.AddWithValue("$dateStart", date.Value.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + "T00:00:00");
+            command.Parameters.AddWithValue("$dateEndExclusive", date.Value.Date.AddDays(1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + "T00:00:00");
+        }
+
+        if (startDate.HasValue)
+        {
+            conditions.Add("NoteDateTime >= $rangeStart");
+            command.Parameters.AddWithValue("$rangeStart", startDate.Value.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + "T00:00:00");
+        }
+
+        if (endDate.HasValue)
+        {
+            conditions.Add("NoteDateTime < $rangeEndExclusive");
+            command.Parameters.AddWithValue("$rangeEndExclusive", endDate.Value.Date.AddDays(1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + "T00:00:00");
+        }
+
+        if (timestamp.HasValue)
+        {
+            conditions.Add("substr(NoteDateTime, 1, 19) = $timestamp");
+            command.Parameters.AddWithValue("$timestamp", timestamp.Value.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture));
+        }
+
+        if (done.HasValue)
+        {
+            conditions.Add("IsDone = $isDone");
+            command.Parameters.AddWithValue("$isDone", done.Value ? 1L : 0L);
+        }
+
+        var whereClause = conditions.Count == 0 ? "" : "WHERE " + string.Join(" AND ", conditions);
+
+        command.CommandText = $"""
             SELECT Id, Title, Details, NoteDateTime, IsDone, CompletedAt, CreatedAt
             FROM MentalNotes
-            WHERE substr(NoteDateTime, 1, 19) = $noteDateTime
-            ORDER BY Id;
+            {whereClause}
+            ORDER BY NoteDateTime, Id;
             """;
-        command.Parameters.AddWithValue("$noteDateTime", dateTime.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture));
 
         return ReadNotes(command);
+    }
+
+    public bool Delete(long id)
+    {
+        using var connection = OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "DELETE FROM MentalNotes WHERE Id = $id;";
+        command.Parameters.AddWithValue("$id", id);
+        return command.ExecuteNonQuery() > 0;
     }
 
     public MentalNote? SetDone(long id) => SetDoneState(id, isDone: true);
 
     public MentalNote? SetUndone(long id) => SetDoneState(id, isDone: false);
-
-    private IReadOnlyList<MentalNote> GetInRange(DateTime startDate, DateTime endDate)
-    {
-        using var connection = OpenConnection();
-
-        var start = startDate.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + "T00:00:00";
-        var endExclusive = endDate.Date.AddDays(1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + "T00:00:00";
-
-        using var command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT Id, Title, Details, NoteDateTime, IsDone, CompletedAt, CreatedAt
-            FROM MentalNotes
-            WHERE NoteDateTime >= $start AND NoteDateTime < $endExclusive
-            ORDER BY NoteDateTime, Id;
-            """;
-        command.Parameters.AddWithValue("$start", start);
-        command.Parameters.AddWithValue("$endExclusive", endExclusive);
-
-        return ReadNotes(command);
-    }
 
     private MentalNote? SetDoneState(long id, bool isDone)
     {
