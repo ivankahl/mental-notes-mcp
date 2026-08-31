@@ -26,10 +26,9 @@ public class MentalNoteTools
     }
 
     [McpServerTool(Name = "create_mental_note")]
-    [Description("Create a mental note. The note is timestamped with the current time; only pass a timestamp when the note should explicitly be logged for a different time.")]
+    [Description("Create a mental note. The note is always timestamped with the current time; there is no option to pass or override the timestamp.")]
     public string CreateMentalNote(
         [Description("Short title or summary of the mental note")] string title,
-        [Description("Optional timestamp for the note, in ISO 8601 format, e.g. 2026-08-29T14:30:00 or 2026-08-29T14:30:00+02:00. Only pass this when the note should explicitly be logged for a specific time; if omitted, the current time is used. The timestamp's offset is preserved.")] string? timestamp = null,
         [Description("Optional extra details or context for the note")] string? details = null)
     {
         if (string.IsNullOrWhiteSpace(title))
@@ -37,15 +36,7 @@ public class MentalNoteTools
             return "Could not create the mental note: a title is required.";
         }
 
-        DateTimeOffset noteTime;
-        if (string.IsNullOrWhiteSpace(timestamp))
-        {
-            noteTime = TruncateToSeconds(DateTimeOffset.Now);
-        }
-        else if (!TryParseTimestamp(timestamp, out noteTime, out var timestampError))
-        {
-            return $"Could not create the mental note: {timestampError}";
-        }
+        var noteTime = TruncateToSeconds(DateTimeOffset.Now);
 
         var note = _store.Create(title.Trim(), NormalizeOptional(details), noteTime);
 
