@@ -43,57 +43,62 @@ public class MentalNoteTools
         return $"Mental note #{note.Id} '{note.Title}' created for {FormatDisplay(note.NoteDateTime)}.";
     }
 
-    [McpServerTool(Name = "get_mental_notes_for_date")]
-    [Description("Get all mental notes with a timestamp on a specific date (any time that day). Returns a JSON array of notes with their ids.")]
-    public string GetMentalNotesForDate(
-        [Description("The date to get notes for, in ISO 8601 format, e.g. 2026-08-29")] string date)
+    [McpServerTool(Name = "search_mental_notes")]
+    [Description("Search mental notes by any combination of filters: a specific date, an inclusive date range, an exact timestamp, and/or completion status. Filters you do not provide are ignored. Returns a JSON array of notes with their ids.")]
+    public string SearchMentalNotes(
+        [Description("Optional. Match notes on a specific date, ISO 8601, e.g. 2026-08-29.")] string? date = null,
+        [Description("Optional. Start of an inclusive date range, ISO 8601, e.g. 2026-08-29.")] string? startDate = null,
+        [Description("Optional. End of an inclusive date range, ISO 8601, e.g. 2026-09-05.")] string? endDate = null,
+        [Description("Optional. Exact timestamp to match, ISO 8601, e.g. 2026-08-29T14:30:00.")] string? timestamp = null,
+        [Description("Optional. true for notes marked done, false for notes not yet done; omit to include both.")] bool? done = null)
     {
-        if (!TryParseDate(date, out var parsedDate, out var error))
+        DateTime? parsedDate = null;
+        DateTime? parsedStart = null;
+        DateTime? parsedEnd = null;
+        DateTimeOffset? parsedTimestamp = null;
+
+        if (!string.IsNullOrWhiteSpace(date))
         {
-            return error;
+            if (!TryParseDate(date, out var d, out var dateError)) return dateError;
+            parsedDate = d;
         }
 
-        var notes = _store.GetForDate(parsedDate);
-        return FormatNotes(notes, $"No mental notes found for {parsedDate:yyyy-MM-dd}.");
+        if (!string.IsNullOrWhiteSpace(startDate))
+        {
+            if (!TryParseDate(startDate, out var d, out var startError)) return startError;
+            parsedStart = d;
+        }
+
+        if (!string.IsNullOrWhiteSpace(endDate))
+        {
+            if (!TryParseDate(endDate, out var d, out var endError)) return endError;
+            parsedEnd = d;
+        }
+
+        if (parsedStart.HasValue && parsedEnd.HasValue && parsedEnd.Value < parsedStart.Value)
+        {
+            return "Could not search mental notes: the end date must not be before the start date.";
+        }
+
+        if (!string.IsNullOrWhiteSpace(timestamp))
+        {
+            if (!TryParseTimestamp(timestamp, out var t, out var timestampError)) return timestampError;
+            parsedTimestamp = t;
+        }
+
+        var notes = _store.Search(parsedDate, parsedStart, parsedEnd, parsedTimestamp, done);
+        return FormatNotes(notes, "No mental notes found matching the given filters.");
     }
 
-    [McpServerTool(Name = "get_mental_notes_for_date_range")]
-    [Description("Get all mental notes with a timestamp within a range of dates, inclusive of both the start and end dates. Returns a JSON array of notes with their ids.")]
-    public string GetMentalNotesForDateRange(
-        [Description("Start of the date range (inclusive), in ISO 8601 format, e.g. 2026-08-29")] string startDate,
-        [Description("End of the date range (inclusive), in ISO 8601 format, e.g. 2026-09-05")] string endDate)
+    [McpServerTool(Name = "delete_mental_note")]
+    [Description("Permanently delete a mental note by its id. This hard-deletes the note and cannot be undone.")]
+    public string DeleteMentalNote(
+        [Description("The id of the mental note to delete")] long id)
     {
-        if (!TryParseDate(startDate, out var parsedStart, out var startError))
-        {
-            return startError;
-        }
-
-        if (!TryParseDate(endDate, out var parsedEnd, out var endError))
-        {
-            return endError;
-        }
-
-        if (parsedEnd < parsedStart)
-        {
-            return "Could not get mental notes: the end date must not be before the start date.";
-        }
-
-        var notes = _store.GetForDateRange(parsedStart, parsedEnd);
-        return FormatNotes(notes, $"No mental notes found between {parsedStart:yyyy-MM-dd} and {parsedEnd:yyyy-MM-dd}.");
-    }
-
-    [McpServerTool(Name = "get_mental_notes_for_datetime")]
-    [Description("Get all mental notes at a specific timestamp (exact match on the date and time part of the timestamp). Returns a JSON array of notes with their ids.")]
-    public string GetMentalNotesForDateTime(
-        [Description("The exact timestamp to get notes for, in ISO 8601 format, e.g. 2026-08-29T14:30:00")] string timestamp)
-    {
-        if (!TryParseTimestamp(timestamp, out var parsedTimestamp, out var error))
-        {
-            return error;
-        }
-
-        var notes = _store.GetForDateTime(parsedTimestamp);
-        return FormatNotes(notes, $"No mental notes found for {FormatDisplay(parsedTimestamp)}.");
+        var deleted = _store.Delete(id);
+        return deleted
+            ? $"Mental note #{id} deleted."
+            : $"No mental note found with id {id}.";
     }
 
     [McpServerTool(Name = "mark_mental_note_done")]
